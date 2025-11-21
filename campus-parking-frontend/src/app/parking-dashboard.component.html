@@ -1,0 +1,212 @@
+<section class="dashboard">
+  <header class="dashboard-header">
+    <div class="title-group">
+      <h2>Campus Parking</h2>
+      <p class="subtitle">See which lots still have free spaces.</p>
+    </div>
+    <button type="button" (click)="refreshSpots()" [disabled]="loading">
+      {{ loading ? 'Refreshing...' : 'Refresh' }}
+    </button>
+  </header>
+
+  <section class="lot-summary" *ngIf="lotSummaries.length">
+    <h3>Lot availability</h3>
+      <div class="lot-cards">
+        <button
+          type="button"
+          class="lot-card"
+          *ngFor="let lot of lotSummaries"
+        (click)="selectLotFilter(lot.lotId)"
+      >
+        <div class="lot-card-header">
+          <span class="lot-name">{{ lot.lotId }}</span>
+          <span
+            class="lot-badge"
+            [class.badge-low]="lot.available === 0"
+            [class.badge-medium]="lot.available > 0 && lot.available <= 3"
+            [class.badge-high]="lot.available > 3"
+          >
+            {{ lot.available }} free
+          </span>
+        </div>
+        <div class="lot-card-body">
+          <div class="lot-card-name">{{ lot.lotId }}</div>
+          <span>{{ lot.available }} / {{ lot.total }} available</span>
+        </div>
+      </button>
+    </div>
+  </section>
+
+  <section class="campus-map">
+    <h3>Campus map</h3>
+    <div class="map-container">
+      <div #leafletMap class="leaflet-map"></div>
+      <div class="map-hint" *ngIf="!lotMarkers.length">
+        Click the map to drop a pin and prefill lat/lon, or add coordinates manually.
+      </div>
+    </div>
+  </section>
+
+  <p class="error" *ngIf="error">{{ error }}</p>
+
+  <section class="top-row">
+    <section class="register-form">
+    <h3>Register New Spot</h3>
+    <form (ngSubmit)="registerSpot()">
+      <div class="field-row">
+        <label for="spotId">Spot ID*</label>
+        <input
+          id="spotId"
+          name="spotId"
+          type="text"
+          [(ngModel)]="newSpotId"
+          (ngModelChange)="updateSuggestedSpotId()"
+          required
+        />
+        <small class="hint">
+          Enter the spot number (2–3 digits); it will be combined with the Lot ID, e.g. <code>Lot-2A-001</code>.
+          <button
+            type="button"
+            class="link-button"
+            *ngIf="suggestedSpotNumber"
+            (click)="useSuggestedSpotId()"
+          >
+            Use {{ suggestedSpotFullId || suggestedSpotNumber }}
+          </button>
+        </small>
+      </div>
+
+      <div class="field-row">
+        <label for="lotId">Lot ID</label>
+        <input
+          id="lotId"
+          name="lotId"
+          type="text"
+          [(ngModel)]="newLotId"
+          (ngModelChange)="onLotChange()"
+          placeholder="Optional"
+        />
+      </div>
+
+      <div class="field-row inline">
+        <div>
+          <label for="lat">Latitude</label>
+          <input
+            id="lat"
+            name="lat"
+            type="number"
+            step="0.000001"
+            [(ngModel)]="newLat"
+            placeholder="Optional"
+          />
+        </div>
+        <div>
+          <label for="lon">Longitude</label>
+          <input
+            id="lon"
+            name="lon"
+            type="number"
+            step="0.000001"
+            [(ngModel)]="newLon"
+            placeholder="Optional"
+          />
+        </div>
+      </div>
+
+      <button type="submit">Register Spot</button>
+    </form>
+    </section>
+
+    <section class="filters">
+      <h3>Filters</h3>
+      <div class="field-row">
+        <label for="filterLotId">Lot</label>
+        <input
+          id="filterLotId"
+          name="filterLotId"
+          type="text"
+          [(ngModel)]="filterLotId"
+          (ngModelChange)="applyFilters()"
+          placeholder="e.g. Lot A"
+        />
+      </div>
+      <div class="field-row">
+        <label for="filterStatus">Status</label>
+        <select
+          id="filterStatus"
+          name="filterStatus"
+          [(ngModel)]="filterStatus"
+          (ngModelChange)="applyFilters()"
+        >
+          <option value="ALL">All</option>
+          <option value="AVAILABLE">Available</option>
+          <option value="OCCUPIED">Occupied</option>
+        </select>
+      </div>
+    </section>
+  </section>
+
+  <section class="spots-list" *ngIf="filteredSpots.length; else emptyState">
+    <table>
+      <thead>
+        <tr>
+          <th>Spot</th>
+          <th>Lot</th>
+          <th>Status</th>
+          <th>Last Updated</th>
+          <th>Location</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let spot of filteredSpots">
+          <td>{{ spot.spotId }}</td>
+          <td>{{ spot.lotId || '—' }}</td>
+          <td>
+            <span
+              class="status-pill"
+              [class.status-available]="spot.status === 'AVAILABLE'"
+              [class.status-occupied]="spot.status === 'OCCUPIED'"
+            >
+              {{ spot.status }}
+            </span>
+          </td>
+          <td>{{ spot.lastUpdated | date: 'short' }}</td>
+          <td>
+            <ng-container *ngIf="spot.lat != null && spot.lon != null; else noLocation">
+              {{ spot.lat }}, {{ spot.lon }}
+            </ng-container>
+            <ng-template #noLocation>—</ng-template>
+          </td>
+          <td>
+            <button
+              type="button"
+              (click)="occupySpot(spot)"
+              [disabled]="spot.status === 'OCCUPIED'"
+            >
+              Occupy
+            </button>
+            <button
+              type="button"
+              (click)="releaseSpot(spot)"
+              [disabled]="spot.status === 'AVAILABLE'"
+            >
+              Release
+            </button>
+            <button
+              type="button"
+              class="delete-button"
+              (click)="deleteSpot(spot)"
+            >
+              Delete
+            </button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <ng-template #emptyState>
+    <p class="empty">No parking spots registered yet.</p>
+  </ng-template>
+</section>
