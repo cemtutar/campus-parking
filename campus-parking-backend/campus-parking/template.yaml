@@ -1,0 +1,135 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Campus Parking Finder backend (API Gateway + Lambda + DynamoDB)
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 10
+    MemorySize: 256
+
+Resources:
+
+  ParkingSpotsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ParkingSpots
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: spotId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: spotId
+          KeyType: HASH
+
+  ApiGatewayApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      Cors:
+        AllowMethods: "'GET,POST,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization'"
+        AllowOrigin: "'*'"
+
+  RegisterSpotFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: parking/
+      Handler: register.handler
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGatewayApi
+            Path: /spots/register
+            Method: post
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref ParkingSpotsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ParkingSpotsTable
+
+  ListSpotsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: parking/
+      Handler: list.handler
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGatewayApi
+            Path: /spots/list
+            Method: get
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref ParkingSpotsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ParkingSpotsTable
+
+  OccupySpotFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: parking/
+      Handler: occupy.handler
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGatewayApi
+            Path: /spots/occupy
+            Method: post
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref ParkingSpotsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ParkingSpotsTable
+
+  ReleaseSpotFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: parking/
+      Handler: release.handler
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGatewayApi
+            Path: /spots/release
+            Method: post
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref ParkingSpotsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ParkingSpotsTable
+
+  DeleteSpotFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: parking/
+      Handler: delete.handler
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGatewayApi
+            Path: /spots/delete
+            Method: delete
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref ParkingSpotsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ParkingSpotsTable
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
+  ParkingSpotsTableName:
+    Description: DynamoDB table name
+    Value: !Ref ParkingSpotsTable
